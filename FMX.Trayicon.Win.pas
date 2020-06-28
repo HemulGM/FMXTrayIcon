@@ -369,7 +369,10 @@ var
 begin
   for i := 0 to Self.Count - 1 do
     if Self[i] = TrayIcon then
+    begin
       Self.Delete(i);
+      Break;
+    end;
 end;
 
 function TTrayIcon.TTrayList.GetByID(ID: Integer; var TrayIcon: TTrayIcon): Boolean;
