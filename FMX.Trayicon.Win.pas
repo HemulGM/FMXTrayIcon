@@ -36,11 +36,12 @@ type
 
   TTrayIconNotify = procedure(ID: Integer) of object;
 
-  TTrayIcon = class(TComponent)
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidWinNX32 or pidWinARM32)]
+  TFMXTrayIcon = class(TComponent)
     type
-      TTrayList = class(TList<TTrayIcon>)
-        procedure Delete(TrayIcon: TTrayIcon); overload;
-        function GetByID(ID: Integer; var TrayIcon: TTrayIcon): Boolean;
+      TTrayList = class(TList<TFMXTrayIcon>)
+        procedure Delete(TrayIcon: TFMXTrayIcon); overload;
+        function GetByID(ID: Integer; var TrayIcon: TFMXTrayIcon): Boolean;
       end;
   private
     class var
@@ -113,7 +114,7 @@ implementation
 
 procedure Register;
 begin
-  RegisterComponents('Win32', [TTrayIcon]);
+  RegisterComponents('Win32', [TFMXTrayIcon]);
 end;
 
 {$IFDEF MSWINDOWS}
@@ -124,20 +125,20 @@ begin
     begin
       case LParam of
         WM_LBUTTONDBLCLK:
-          TTrayIcon.InternalTrayIconDblClick(WParam);
+          TFMXTrayIcon.InternalTrayIconDblClick(WParam);
         WM_LBUTTONDOWN:
-          TTrayIcon.InternalTrayIconClick(WParam);
+          TFMXTrayIcon.InternalTrayIconClick(WParam);
         WM_RBUTTONDOWN:
-          TTrayIcon.InternalTrayIconRightClick(WParam);
+          TFMXTrayIcon.InternalTrayIconRightClick(WParam);
       end;
     end;
   except
   end;
-  Result := CallWindowProc(Ptr(TTrayIcon.OldWndProc), HWND, Msg, WParam, LParam);
+  Result := CallWindowProc(Ptr(TFMXTrayIcon.OldWndProc), HWND, Msg, WParam, LParam);
 end;
 {$ENDIF}
 
-class procedure TTrayIcon.Hook;
+class procedure TFMXTrayIcon.Hook;
 begin
 {$IFDEF MSWINDOWS}
   if NeedHook then
@@ -149,31 +150,31 @@ begin
 {$ENDIF}
 end;
 
-class procedure TTrayIcon.InternalTrayIconClick(ID: Integer);
+class procedure TFMXTrayIcon.InternalTrayIconClick(ID: Integer);
 var
-  Tray: TTrayIcon;
+  Tray: TFMXTrayIcon;
 begin
   if TrayList.GetByID(ID, Tray) then
     Tray.DoOnClick;
 end;
 
-class procedure TTrayIcon.InternalTrayIconDblClick(ID: Integer);
+class procedure TFMXTrayIcon.InternalTrayIconDblClick(ID: Integer);
 var
-  Tray: TTrayIcon;
+  Tray: TFMXTrayIcon;
 begin
   if TrayList.GetByID(ID, Tray) then
     Tray.DoOnDblClick;
 end;
 
-class procedure TTrayIcon.InternalTrayIconRightClick(ID: Integer);
+class procedure TFMXTrayIcon.InternalTrayIconRightClick(ID: Integer);
 var
-  Tray: TTrayIcon;
+  Tray: TFMXTrayIcon;
 begin
   if TrayList.GetByID(ID, Tray) then
     Tray.DoOnRightClick;
 end;
 
-constructor TTrayIcon.Create(AOwner: TComponent);
+constructor TFMXTrayIcon.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   Inc(IDs);
@@ -189,19 +190,19 @@ begin
   TrayList.Add(Self);
 end;
 
-procedure TTrayIcon.SetAutoShow(const Value: Boolean);
+procedure TFMXTrayIcon.SetAutoShow(const Value: Boolean);
 begin
   FAutoShow := Value;
 end;
 
-procedure TTrayIcon.SetHint(const Value: string);
+procedure TFMXTrayIcon.SetHint(const Value: string);
 begin
   FHint := Value;
   if FShowing then
     UpdateHint;
 end;
 
-procedure TTrayIcon.SetIcon(const Value: TIcon);
+procedure TFMXTrayIcon.SetIcon(const Value: TIcon);
 begin
   FIcon := Value;
   {$IFDEF MSWINDOWS}
@@ -214,18 +215,18 @@ begin
   {$ENDIF}
 end;
 
-procedure TTrayIcon.SetIconResource(const Value: string);
+procedure TFMXTrayIcon.SetIconResource(const Value: string);
 begin
   FIconResource := Value;
   LoadIconFromResources(Value);
 end;
 
-procedure TTrayIcon.SetID(const Value: Integer);
+procedure TFMXTrayIcon.SetID(const Value: Integer);
 begin
   FID := Value;
 end;
 
-procedure TTrayIcon.Show;
+procedure TFMXTrayIcon.Show;
 begin
   {$IFDEF MSWINDOWS}
   if FShowing then
@@ -248,7 +249,7 @@ begin
   {$ENDIF}
 end;
 
-procedure TTrayIcon.ShowBalloonHint;
+procedure TFMXTrayIcon.ShowBalloonHint;
 begin
   {$IFDEF MSWINDOWS}
   with FNotifyIconData do
@@ -262,7 +263,7 @@ begin
   {$ENDIF}
 end;
 
-procedure TTrayIcon.ShowBalloonHint(Title, Text: string; BalloonIcon: TBalloonIconType);
+procedure TFMXTrayIcon.ShowBalloonHint(Title, Text: string; BalloonIcon: TBalloonIconType);
 begin
   FBalloonText := Text;
   FBalloonTitle := Title;
@@ -270,7 +271,7 @@ begin
   ShowBalloonHint;
 end;
 
-procedure TTrayIcon.UpdateIcon;
+procedure TFMXTrayIcon.UpdateIcon;
 begin
   {$IFDEF MSWINDOWS}
   with FNotifyIconData do
@@ -282,7 +283,7 @@ begin
   {$ENDIF}
 end;
 
-procedure TTrayIcon.UpdateHint;
+procedure TFMXTrayIcon.UpdateHint;
 begin
   {$IFDEF MSWINDOWS}
   with FNotifyIconData do
@@ -294,7 +295,7 @@ begin
   {$ENDIF}
 end;
 
-procedure TTrayIcon.Hide;
+procedure TFMXTrayIcon.Hide;
 begin
   FShowing := False;
   {$IFDEF MSWINDOWS}
@@ -302,7 +303,7 @@ begin
   {$ENDIF}
 end;
 
-procedure TTrayIcon.Loaded;
+procedure TFMXTrayIcon.Loaded;
 begin
   inherited;
   if not (csDesigning in ComponentState) then
@@ -312,14 +313,14 @@ begin
   end;
 end;
 
-procedure TTrayIcon.LoadIconFromResources(ResourceName: string);
+procedure TFMXTrayIcon.LoadIconFromResources(ResourceName: string);
 begin
   {$IFDEF MSWINDOWS}
   Icon := LoadIcon(hInstance, PChar(ResourceName));
   {$ENDIF}
 end;
 
-destructor TTrayIcon.Destroy;
+destructor TFMXTrayIcon.Destroy;
 begin
   if FShowing then
     Hide;
@@ -327,19 +328,19 @@ begin
   inherited;
 end;
 
-procedure TTrayIcon.DoOnClick;
+procedure TFMXTrayIcon.DoOnClick;
 begin
   if Assigned(FOnClick) then
     FOnClick(Self);
 end;
 
-procedure TTrayIcon.DoOnDblClick;
+procedure TFMXTrayIcon.DoOnDblClick;
 begin
   if Assigned(FOnDblClick) then
     FOnDblClick(Self);
 end;
 
-procedure TTrayIcon.DoOnPopup;
+procedure TFMXTrayIcon.DoOnPopup;
 {$IFDEF MSWINDOWS}
 var
   CurPos: TPoint;
@@ -353,7 +354,7 @@ begin
   {$ENDIF}
 end;
 
-procedure TTrayIcon.DoOnRightClick;
+procedure TFMXTrayIcon.DoOnRightClick;
 begin
   if Assigned(FOnPopup) then
     FOnPopup(Self)
@@ -363,7 +364,7 @@ end;
 
 { TTrayIcon.TTrayList }
 
-procedure TTrayIcon.TTrayList.Delete(TrayIcon: TTrayIcon);
+procedure TFMXTrayIcon.TTrayList.Delete(TrayIcon: TFMXTrayIcon);
 var
   i: Integer;
 begin
@@ -375,7 +376,7 @@ begin
     end;
 end;
 
-function TTrayIcon.TTrayList.GetByID(ID: Integer; var TrayIcon: TTrayIcon): Boolean;
+function TFMXTrayIcon.TTrayList.GetByID(ID: Integer; var TrayIcon: TFMXTrayIcon): Boolean;
 var
   i: Integer;
 begin
@@ -392,12 +393,12 @@ begin
 end;
 
 initialization
-  TTrayIcon.TrayList := TTrayIcon.TTrayList.Create;
-  TTrayIcon.NeedHook := True;
-  TTrayIcon.IDs := 0;
+  TFMXTrayIcon.TrayList := TFMXTrayIcon.TTrayList.Create;
+  TFMXTrayIcon.NeedHook := True;
+  TFMXTrayIcon.IDs := 0;
 
 finalization
-  TTrayIcon.TrayList.Free;
+  TFMXTrayIcon.TrayList.Free;
 
 end.
 
