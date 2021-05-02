@@ -106,6 +106,7 @@ type
     property OnDblClick: TNotifyEvent read FOnDblClick write FOnDblClick;
     property OnPopup: TNotifyEvent read FOnPopup write FOnPopup;
     property IconResource: string read FIconResource write SetIconResource;
+    property WindowHandle: HWND read FWindowHandle write FWindowHandle;
   end;
 
 procedure Register;
@@ -183,7 +184,7 @@ begin
   FAutoShow := True;
   FPopupOffset := 0;
   {$IFDEF MSWINDOWS}
-  FWindowHandle := FmxHandleToHWND((Owner as TForm).Handle);
+  FWindowHandle := FmxHandleToHWND((AOwner as TForm).Handle);
   FHICON := GetClassLong(FWindowHandle, GCL_HICONSM);
   {$ENDIF}
   //
