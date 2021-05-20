@@ -87,6 +87,7 @@ type
     destructor Destroy; override;
     procedure Show;
     procedure Hide;
+    procedure RecreateIcon(Rehook: Boolean = False);
     procedure ShowBalloonHint; overload;
     procedure ShowBalloonHint(Title, Text: string; BalloonIcon: TBalloonIconType); overload;
     property Icon: TIcon read FIcon write SetIcon;
@@ -227,11 +228,11 @@ begin
   FID := Value;
 end;
 
-procedure TFMXTrayIcon.Show;
+procedure TFMXTrayIcon.RecreateIcon;
 begin
-  {$IFDEF MSWINDOWS}
-  if FShowing then
-    Exit;
+  if Rehook then
+    TFMXTrayIcon.NeedHook := True;
+
   FShowing := True;
   with FNotifyIconData do
   begin
@@ -247,6 +248,14 @@ begin
   Shell_NotifyIcon(NIM_ADD, @FNotifyIconData);
   if Owner is TForm then
     Hook(FWindowHandle);
+end;
+
+procedure TFMXTrayIcon.Show;
+begin
+  {$IFDEF MSWINDOWS}
+  if FShowing then
+    Exit;
+  RecreateIcon;
   {$ENDIF}
 end;
 
