@@ -230,6 +230,7 @@ end;
 
 procedure TFMXTrayIcon.RecreateIcon;
 begin
+  {$IFDEF MSWINDOWS}
   if Rehook then
     TFMXTrayIcon.NeedHook := True;
 
@@ -248,6 +249,7 @@ begin
   Shell_NotifyIcon(NIM_ADD, @FNotifyIconData);
   if Owner is TForm then
     Hook(FWindowHandle);
+  {$ENDIF}
 end;
 
 procedure TFMXTrayIcon.Show;
