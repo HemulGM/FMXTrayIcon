@@ -65,7 +65,6 @@ type
     FShowing: Boolean;
     FAutoShow: Boolean;
     FID: Integer;
-    FWindowHandle: HWND;
     FIconResource: string;
     procedure DoOnClick;
     procedure DoOnDblClick;
@@ -82,6 +81,7 @@ type
     procedure SetHint(const Value: string);
     procedure UpdateHint;
     procedure SetIconResource(const Value: string);
+    function GetWindowHandle: HWND;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -92,6 +92,7 @@ type
     procedure ShowBalloonHint(Title, Text: string; BalloonIcon: TBalloonIconType); overload;
     property Icon: TIcon read FIcon write SetIcon;
     procedure LoadIconFromResources(ResourceName: string);
+    property WindowHandle: HWND read GetWindowHandle;
   protected
     procedure Loaded; override;
   published
@@ -107,7 +108,6 @@ type
     property OnDblClick: TNotifyEvent read FOnDblClick write FOnDblClick;
     property OnPopup: TNotifyEvent read FOnPopup write FOnPopup;
     property IconResource: string read FIconResource write SetIconResource;
-    property WindowHandle: HWND read FWindowHandle write FWindowHandle;
   end;
 
 procedure Register;
@@ -128,9 +128,9 @@ begin
       case LParam of
         WM_LBUTTONDBLCLK:
           TFMXTrayIcon.InternalTrayIconDblClick(WParam);
-        WM_LBUTTONDOWN:
+        WM_LBUTTONUP:
           TFMXTrayIcon.InternalTrayIconClick(WParam);
-        WM_RBUTTONDOWN:
+        WM_RBUTTONUP:
           TFMXTrayIcon.InternalTrayIconRightClick(WParam);
       end;
     end;
@@ -185,8 +185,7 @@ begin
   FAutoShow := True;
   FPopupOffset := 0;
   {$IFDEF MSWINDOWS}
-  FWindowHandle := FmxHandleToHWND((AOwner as TForm).Handle);
-  FHICON := GetClassLong(FWindowHandle, GCL_HICONSM);
+  FHICON := GetClassLong(WindowHandle, GCL_HICONSM);
   {$ENDIF}
   //
   TrayList.Add(Self);
@@ -211,7 +210,7 @@ begin
   if FIcon <> 0 then
     FHICON := FIcon
   else
-    FHICON := GetClassLong(FWindowHandle, GCL_HICONSM);
+    FHICON := GetClassLong(WindowHandle, GCL_HICONSM);
   if FShowing then
     UpdateIcon;
   {$ENDIF}
@@ -238,7 +237,7 @@ begin
   with FNotifyIconData do
   begin
     cbSize := SizeOf;
-    Wnd := FWindowHandle;
+    Wnd := WindowHandle;
     uID := FID;
     uFlags := NIF_MESSAGE + NIF_ICON + NIF_TIP;
     dwInfoFlags := NIIF_NONE;
@@ -248,7 +247,7 @@ begin
   end;
   Shell_NotifyIcon(NIM_ADD, @FNotifyIconData);
   if Owner is TForm then
-    Hook(FWindowHandle);
+    Hook(WindowHandle);
   {$ENDIF}
 end;
 
@@ -357,7 +356,7 @@ procedure TFMXTrayIcon.DoOnPopup;
 var
   CurPos: TPoint;
 begin
-  SetForegroundWindow(FWindowHandle);
+  SetForegroundWindow(WindowHandle);
   GetCursorPos(CurPos);
   if Assigned(FPopupMenu) then
     FPopupMenu.Popup(CurPos.X, CurPos.Y - FPopupOffset);
@@ -372,6 +371,11 @@ begin
     FOnPopup(Self)
   else
     DoOnPopup;
+end;
+
+function TFMXTrayIcon.GetWindowHandle: HWND;
+begin
+  Result := ApplicationHWND{FmxHandleToHWND((Owner as TForm).Handle)};
 end;
 
 { TTrayIcon.TTrayList }
