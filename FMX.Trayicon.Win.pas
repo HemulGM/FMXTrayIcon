@@ -82,6 +82,7 @@ type
     procedure UpdateHint;
     procedure SetIconResource(const Value: string);
     function GetWindowHandle: HWND;
+    procedure SetPopupMenu(const Value: TPopupMenu);
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -101,7 +102,7 @@ type
     property BalloonTitle: string read FBalloonTitle write FBalloonTitle;
     property BalloonIconType: TBalloonIconType read FBalloonIconType write FBalloonIconType default TBalloonIconType.None;
     property PopupOffset: Integer read FPopupOffset write FPopupOffset default 0;
-    property PopupMenu: TPopupMenu read FPopupMenu write FPopupMenu;
+    property PopupMenu: TPopupMenu read FPopupMenu write SetPopupMenu;
     property AutoShow: Boolean read FAutoShow write SetAutoShow default True;
     property ID: Integer read FID write SetID;
     property OnClick: TNotifyEvent read FOnClick write FOnClick;
@@ -113,6 +114,9 @@ type
 procedure Register;
 
 implementation
+
+uses
+  FMX.Types, FMX.Controls;
 
 procedure Register;
 begin
@@ -225,6 +229,11 @@ end;
 procedure TFMXTrayIcon.SetID(const Value: Integer);
 begin
   FID := Value;
+end;
+
+procedure TFMXTrayIcon.SetPopupMenu(const Value: TPopupMenu);
+begin
+  FPopupMenu := Value;
 end;
 
 procedure TFMXTrayIcon.RecreateIcon;
@@ -351,15 +360,29 @@ begin
     FOnDblClick(Self);
 end;
 
+type
+  TPopupAccess = class(TPopup);
+
 procedure TFMXTrayIcon.DoOnPopup;
 {$IFDEF MSWINDOWS}
 var
   CurPos: TPoint;
 begin
   SetForegroundWindow(WindowHandle);
+  Winapi.Windows.BringWindowToTop(WindowHandle);
   GetCursorPos(CurPos);
   if Assigned(FPopupMenu) then
+  begin          {
+    TThread.ForceQueue(nil,
+    procedure
+    begin
+      Winapi.Windows.BringWindowToTop(FormToHWND(TCustomForm(Screen.PopupForms[0])));
+    end);    }
     FPopupMenu.Popup(CurPos.X, CurPos.Y - FPopupOffset);
+
+    //TCustomForm(TPopupAccess(FPopupMenu.Parent).PopupForm).FormStyle := TFormStyle.StayOnTop;
+    //
+  end;
   {$ELSE}
 begin
   {$ENDIF}
@@ -375,7 +398,7 @@ end;
 
 function TFMXTrayIcon.GetWindowHandle: HWND;
 begin
-  Result := ApplicationHWND{FmxHandleToHWND((Owner as TForm).Handle)};
+  Result := FmxHandleToHWND((Owner as TForm).Handle);
 end;
 
 { TTrayIcon.TTrayList }
