@@ -10,7 +10,7 @@ uses
   {$IFDEF MSWINDOWS}
   FMX.Platform.Win, Winapi.ShellAPI, Winapi.Windows, Winapi.Messages,
   {$ENDIF}
-  FMX.Dialogs, FMX.Menus, FMX.Forms, FMX.Objects;
+  FMX.Dialogs, FMX.Menus, FMX.Forms, FMX.Objects, System.Messaging;
 
 {$IFDEF MSWINDOWS}
 const
@@ -66,6 +66,7 @@ type
     FAutoShow: Boolean;
     FID: Integer;
     FIconResource: string;
+    FShowingPopup: Boolean;
     procedure DoOnClick;
     procedure DoOnDblClick;
     procedure DoOnRightClick;
@@ -83,6 +84,7 @@ type
     procedure SetIconResource(const Value: string);
     function GetWindowHandle: HWND;
     procedure SetPopupMenu(const Value: TPopupMenu);
+    procedure FOnPopupForm(const Sender: TObject; const M: TMessage);
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -183,6 +185,8 @@ end;
 constructor TFMXTrayIcon.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FShowingPopup := False;
+  TMessageManager.DefaultManager.SubscribeToMessage(TFormBeforeShownMessage, FOnPopupForm);
   Inc(IDs);
   FID := IDs;
   FShowing := False;
@@ -342,6 +346,7 @@ end;
 
 destructor TFMXTrayIcon.Destroy;
 begin
+  TMessageManager.DefaultManager.Unsubscribe(TFormBeforeShownMessage, FOnPopupForm);
   if FShowing then
     Hide;
   TrayList.Delete(Self);
@@ -360,28 +365,22 @@ begin
     FOnDblClick(Self);
 end;
 
-type
-  TPopupAccess = class(TPopup);
-
 procedure TFMXTrayIcon.DoOnPopup;
 {$IFDEF MSWINDOWS}
 var
   CurPos: TPoint;
 begin
-  SetForegroundWindow(WindowHandle);
-  Winapi.Windows.BringWindowToTop(WindowHandle);
+  SetForegroundWindow(ApplicationHWND);
   GetCursorPos(CurPos);
   if Assigned(FPopupMenu) then
-  begin          {
-    TThread.ForceQueue(nil,
-    procedure
-    begin
-      Winapi.Windows.BringWindowToTop(FormToHWND(TCustomForm(Screen.PopupForms[0])));
-    end);    }
-    FPopupMenu.Popup(CurPos.X, CurPos.Y - FPopupOffset);
-
-    //TCustomForm(TPopupAccess(FPopupMenu.Parent).PopupForm).FormStyle := TFormStyle.StayOnTop;
-    //
+  begin
+    FPopupMenu.CloseMenu;
+    FShowingPopup := True;
+    try
+      FPopupMenu.Popup(CurPos.X, CurPos.Y - FPopupOffset);
+    finally
+      FShowingPopup := False;
+    end;
   end;
   {$ELSE}
 begin
@@ -394,6 +393,20 @@ begin
     FOnPopup(Self)
   else
     DoOnPopup;
+end;
+
+procedure TFMXTrayIcon.FOnPopupForm(const Sender: TObject; const M: TMessage);
+var
+  Msg: TFormBeforeShownMessage absolute M;
+begin
+  if FShowingPopup and (Msg.Value is TCustomPopupForm) then
+  begin
+    SetWindowPos(
+        FormToHWND(Msg.Value),
+        HWND_TOPMOST, 0, 0, 0, 0,
+        SWP_NOSIZE or SWP_NOMOVE or SWP_NOACTIVATE
+    );
+  end;
 end;
 
 function TFMXTrayIcon.GetWindowHandle: HWND;
