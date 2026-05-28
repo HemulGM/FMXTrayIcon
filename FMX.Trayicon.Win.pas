@@ -55,7 +55,6 @@ type
       FIsWin11: Boolean;
   private
     FIcon: TIcon;
-    FFMXIcon: TBitmap;
     FHICON: HICON;
     FHint: string;
     FBalloonTitle: string;
@@ -544,7 +543,6 @@ begin
   if Bitmap = nil then
     Exit;
 
-  FFMXIcon := Bitmap;
   FHICON := BitmapToHICON(Bitmap);
 
   if FHICON = 0 then
