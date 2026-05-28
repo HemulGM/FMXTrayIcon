@@ -1,4 +1,4 @@
-unit FMX.Trayicon.Win;
+п»їunit FMX.Trayicon.Win;
 
 interface
 
@@ -41,11 +41,11 @@ type
 
   [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidWinNX32 or pidWinARM32)]
   TFMXTrayIcon = class(TComponent)
-  public type
-    TTrayList = class(TList<TFMXTrayIcon>)
-      procedure Delete(TrayIcon: TFMXTrayIcon); overload;
-      function GetByID(ID: Integer; var TrayIcon: TFMXTrayIcon): Boolean;
-    end;
+    type
+      TTrayList = class(TList<TFMXTrayIcon>)
+        procedure Delete(TrayIcon: TFMXTrayIcon); overload;
+        function GetByID(ID: Integer; var TrayIcon: TFMXTrayIcon): Boolean;
+      end;
   private
     class var
       TrayList: TTrayList;
@@ -55,6 +55,7 @@ type
       FIsWin11: Boolean;
   private
     FIcon: TIcon;
+    FFMXIcon: FMX.Graphics.TBitmap; 
     FHICON: HICON;
     FHint: string;
     FBalloonTitle: string;
@@ -91,9 +92,10 @@ type
     procedure SetIconResource(const Value: string);
     function GetWindowHandle: HWND;
     procedure SetPopupMenu(const Value: TPopupMenu);
+    procedure FOnPopupForm(const Sender: TObject; const M: TMessage);
     procedure ShowCustomTooltip;
     procedure HideCustomTooltip;
-    procedure LoadIconFromBitmapInternal(Bitmap: TBitmap);
+    procedure LoadIconFromBitmapInternal(Bitmap: FMX.Graphics.TBitmap);
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -240,7 +242,7 @@ type
   TLongWordArray = array[0..32767] of LongWord;
   PLongWordArray = ^TLongWordArray;
 
-function BitmapToHICON(Bitmap: TBitmap): HICON;
+function BitmapToHICON(Bitmap: FMX.Graphics.TBitmap): HICON;
 var
   IconInfo: TIconInfo;
   hbmColor, hbmMask: HBITMAP;
@@ -272,7 +274,7 @@ begin
       OldMaskBmp := SelectObject(MaskDC, hbmMask);
 
       PatBlt(ColorDC, 0, 0, Bitmap.Width, Bitmap.Height, BLACKNESS);
-      PatBlt(MaskDC, 0, 0, Bitmap.Width, Bitmap.Height, WHITENESS); // По умолчанию все непрозрачно
+      PatBlt(MaskDC, 0, 0, Bitmap.Width, Bitmap.Height, WHITENESS); // РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ РІСЃРµ РЅРµРїСЂРѕР·СЂР°С‡РЅРѕ
 
       if Bitmap.Map(TMapAccess.Read, BitmapData) then
       try
@@ -288,11 +290,11 @@ begin
 
             SetPixelV(ColorDC, x, y, RGB(R, G, B));
 
-            // Для маски: белый = прозрачный, черный = непрозрачный
+            // Р”Р»СЏ РјР°СЃРєРё: Р±РµР»С‹Р№ = РїСЂРѕР·СЂР°С‡РЅС‹Р№, С‡РµСЂРЅС‹Р№ = РЅРµРїСЂРѕР·СЂР°С‡РЅС‹Р№
             if A < 128 then
-              SetPixelV(MaskDC, x, y, RGB(255, 255, 255))  // Прозрачный
+              SetPixelV(MaskDC, x, y, RGB(255, 255, 255))  // РџСЂРѕР·СЂР°С‡РЅС‹Р№
             else
-              SetPixelV(MaskDC, x, y, RGB(0, 0, 0));       // Непрозрачный
+              SetPixelV(MaskDC, x, y, RGB(0, 0, 0));       // РќРµРїСЂРѕР·СЂР°С‡РЅС‹Р№
           end;
         end;
       finally
@@ -381,18 +383,16 @@ constructor TFMXTrayIcon.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   FShowingPopup := False;
+  TMessageManager.DefaultManager.SubscribeToMessage(TFormBeforeShownMessage, FOnPopupForm);
+  Inc(IDs);
+  FID := IDs;
   FShowing := False;
   FAutoShow := True;
   FPopupOffset := 0;
-  FTooltipWnd := 0;
-
-  Inc(IDs);
-  FID := IDs;
-
   {$IFDEF MSWINDOWS}
-  FHICON := GetClassLong(GetWindowHandle, GCL_HICONSM);
+  FHICON := GetClassLong(WindowHandle, GCL_HICONSM);
+  FTooltipWnd := 0;
   {$ENDIF}
-
   TrayList.Add(Self);
 end;
 
@@ -408,6 +408,7 @@ begin
     UpdateHint;
 end;
 
+
 procedure TFMXTrayIcon.SetIcon(const Value: TIcon);
 begin
   FIcon := Value;
@@ -415,7 +416,7 @@ begin
   if FIcon <> 0 then
     FHICON := FIcon
   else
-    FHICON := GetClassLong(GetWindowHandle, GCL_HICONSM);
+    FHICON := GetClassLong(WindowHandle, GCL_HICONSM);
   if FShowing then
     UpdateIcon;
   {$ENDIF}
@@ -437,7 +438,7 @@ begin
   FPopupMenu := Value;
 end;
 
-procedure TFMXTrayIcon.RecreateIcon(Rehook: Boolean);
+procedure TFMXTrayIcon.RecreateIcon;
 begin
   {$IFDEF MSWINDOWS}
   if Rehook then
@@ -445,7 +446,7 @@ begin
 
   FShowing := True;
   FNotifyIconData.cbSize := SizeOf(FNotifyIconData);
-  FNotifyIconData.Wnd := GetWindowHandle;
+  FNotifyIconData.Wnd := WindowHandle;
   FNotifyIconData.uID := FID;
   FNotifyIconData.uCallbackMessage := WM_TRAYICON;
   FNotifyIconData.hIcon := FHICON;
@@ -456,15 +457,19 @@ begin
     StrLCopy(FNotifyIconData.szTip, PChar(FHint), High(FNotifyIconData.szTip));
   end else begin
     FNotifyIconData.uFlags := NIF_MESSAGE + NIF_ICON + NIF_TIP + NIF_SHOWTIP;
-    StrLCopy(FNotifyIconData.szTip, PChar(FHint), High(FNotifyIconData.szTip));
+    if Length(FHint) > 127 then
+      StrLCopy(FNotifyIconData.szTip, PChar(FHint), High(FNotifyIconData.szTip))
+    else
+      StrLCopy(FNotifyIconData.szTip, PChar(FHint), High(FNotifyIconData.szTip));
   end;
 
   Shell_NotifyIcon(NIM_ADD, @FNotifyIconData);
+
   FNotifyIconData.uVersion := NOTIFYICON_VERSION_4;
   Shell_NotifyIcon(NIM_SETVERSION, @FNotifyIconData);
 
   if Owner is TForm then
-    Hook(GetWindowHandle);
+    Hook(WindowHandle);
   {$ENDIF}
 end;
 
@@ -508,8 +513,17 @@ end;
 procedure TFMXTrayIcon.UpdateHint;
 begin
   {$IFDEF MSWINDOWS}
-  FNotifyIconData.uFlags := NIF_TIP + NIF_SHOWTIP;
-  StrLCopy(FNotifyIconData.szTip, PChar(FHint), High(FNotifyIconData.szTip));
+  if (Length(FHint) > 127) and (not FIsWin11) then begin
+    FNotifyIconData.uFlags := NIF_TIP;
+    StrLCopy(FNotifyIconData.szTip, PChar(FHint), High(FNotifyIconData.szTip));
+  end else begin
+    // Standard tooltip path.
+    FNotifyIconData.uFlags := NIF_TIP + NIF_SHOWTIP;
+    if Length(FHint) > 127 then
+      StrLCopy(FNotifyIconData.szTip, PChar(FHint), High(FNotifyIconData.szTip))
+    else
+      StrLCopy(FNotifyIconData.szTip, PChar(FHint), High(FNotifyIconData.szTip));
+  end;
   Shell_NotifyIcon(NIM_MODIFY, @FNotifyIconData);
   {$ENDIF}
 end;
@@ -533,12 +547,13 @@ begin
   end;
 end;
 
-procedure TFMXTrayIcon.LoadIconFromBitmapInternal(Bitmap: TBitmap);
+procedure TFMXTrayIcon.LoadIconFromBitmapInternal(Bitmap: FMX.Graphics.TBitmap);
 {$IFDEF MSWINDOWS}
 begin
   if Bitmap = nil then
     Exit;
 
+  FFMXIcon := Bitmap;
   FHICON := BitmapToHICON(Bitmap);
 
   if FHICON = 0 then
@@ -557,9 +572,9 @@ end;
 procedure TFMXTrayIcon.LoadIconFromBitmapStream(Stream: TStream);
 {$IFDEF MSWINDOWS}
 var
-  Bitmap: TBitmap;
+  Bitmap: FMX.Graphics.TBitmap;
 begin
-  Bitmap := TBitmap.Create;
+  Bitmap := FMX.Graphics.TBitmap.Create;
   try
     Bitmap.LoadFromStream(Stream);
     LoadIconFromBitmapInternal(Bitmap);
@@ -585,6 +600,7 @@ end;
 
 destructor TFMXTrayIcon.Destroy;
 begin
+  TMessageManager.DefaultManager.Unsubscribe(TFormBeforeShownMessage, FOnPopupForm);
   if FShowing then
     Hide;
   TrayList.Delete(Self);
@@ -689,16 +705,8 @@ procedure TFMXTrayIcon.DoOnPopup;
 {$IFDEF MSWINDOWS}
 var
   CurPos: TPoint;
-  FormHandle: HWND;
 begin
-  if Application.MainForm <> nil then
-    FormHandle := FmxHandleToHWND(Application.MainForm.Handle)
-  else
-    FormHandle := 0;
-
-  if FormHandle <> 0 then
-    SetForegroundWindow(FormHandle);
-
+  SetForegroundWindow(ApplicationHWND);
   GetCursorPos(CurPos);
   if Assigned(FPopupMenu) then
   begin
@@ -710,9 +718,9 @@ begin
       FShowingPopup := False;
     end;
   end;
-{$ELSE}
+  {$ELSE}
 begin
-{$ENDIF}
+  {$ENDIF}
 end;
 
 procedure TFMXTrayIcon.DoOnRightClick;
@@ -723,11 +731,23 @@ begin
     DoOnPopup;
 end;
 
+procedure TFMXTrayIcon.FOnPopupForm(const Sender: TObject; const M: TMessage);
+var
+  Msg: TFormBeforeShownMessage absolute M;
+begin
+  if FShowingPopup and (Msg.Value is TCustomPopupForm) then
+  begin
+    SetWindowPos(
+        FormToHWND(Msg.Value),
+        HWND_TOPMOST, 0, 0, 0, 0,
+        SWP_NOSIZE or SWP_NOMOVE or SWP_NOACTIVATE
+    );
+  end;
+end;
+
 function TFMXTrayIcon.GetWindowHandle: HWND;
 begin
-  Result := 0;
-  if (Owner <> nil) and (Owner is TForm) then
-    Result := FmxHandleToHWND((Owner as TForm).Handle);
+  Result := FmxHandleToHWND((Owner as TForm).Handle);
 end;
 
 { TTrayIcon.TTrayList }
@@ -776,3 +796,4 @@ finalization
   TFMXTrayIcon.TrayList.Free;
 
 end.
+
