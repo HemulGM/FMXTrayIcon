@@ -55,7 +55,6 @@ type
       FIsWin11: Boolean;
   private
     FIcon: TIcon;
-    FFMXIcon: FMX.Graphics.TBitmap; 
     FHICON: HICON;
     FHint: string;
     FBalloonTitle: string;
@@ -92,10 +91,9 @@ type
     procedure SetIconResource(const Value: string);
     function GetWindowHandle: HWND;
     procedure SetPopupMenu(const Value: TPopupMenu);
-    procedure FOnPopupForm(const Sender: TObject; const M: TMessage);
     procedure ShowCustomTooltip;
     procedure HideCustomTooltip;
-    procedure LoadIconFromBitmapInternal(Bitmap: FMX.Graphics.TBitmap);
+    procedure LoadIconFromBitmapInternal(Bitmap: TBitmap);
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -130,7 +128,7 @@ procedure Register;
 implementation
 
 uses
-  FMX.Types, FMX.Controls, System.UITypes;
+  System.Types, FMX.Types, FMX.Controls, System.UITypes;
 
 procedure Register;
 begin
@@ -153,7 +151,6 @@ var
   TextLen: Integer;
   OldFont: HFONT;
   Font: HFONT;
-  LogFont: TLogFont;
   NcMetrics: TNonClientMetrics;
 begin
   case Msg of
@@ -243,7 +240,7 @@ type
   TLongWordArray = array[0..32767] of LongWord;
   PLongWordArray = ^TLongWordArray;
 
-function BitmapToHICON(Bitmap: FMX.Graphics.TBitmap): HICON;
+function BitmapToHICON(Bitmap: TBitmap): HICON;
 var
   IconInfo: TIconInfo;
   hbmColor, hbmMask: HBITMAP;
@@ -393,7 +390,6 @@ begin
   FID := IDs;
 
   {$IFDEF MSWINDOWS}
-  FFMXIcon := nil;
   FHICON := GetClassLong(GetWindowHandle, GCL_HICONSM);
   {$ENDIF}
 
@@ -537,13 +533,12 @@ begin
   end;
 end;
 
-procedure TFMXTrayIcon.LoadIconFromBitmapInternal(Bitmap: FMX.Graphics.TBitmap);
+procedure TFMXTrayIcon.LoadIconFromBitmapInternal(Bitmap: TBitmap);
 {$IFDEF MSWINDOWS}
 begin
   if Bitmap = nil then
     Exit;
 
-  FFMXIcon := Bitmap;
   FHICON := BitmapToHICON(Bitmap);
 
   if FHICON = 0 then
@@ -562,9 +557,9 @@ end;
 procedure TFMXTrayIcon.LoadIconFromBitmapStream(Stream: TStream);
 {$IFDEF MSWINDOWS}
 var
-  Bitmap: FMX.Graphics.TBitmap;
+  Bitmap: TBitmap;
 begin
-  Bitmap := FMX.Graphics.TBitmap.Create;
+  Bitmap := TBitmap.Create;
   try
     Bitmap.LoadFromStream(Stream);
     LoadIconFromBitmapInternal(Bitmap);
@@ -595,8 +590,6 @@ begin
   TrayList.Delete(Self);
   {$IFDEF MSWINDOWS}
   HideCustomTooltip;
-  if FFMXIcon <> nil then
-    FFMXIcon.Free;
   {$ENDIF}
   inherited;
 end;
@@ -728,22 +721,6 @@ begin
     FOnPopup(Self)
   else
     DoOnPopup;
-end;
-
-procedure TFMXTrayIcon.FOnPopupForm(const Sender: TObject; const M: TMessage);
-var
-  Msg: TFormBeforeShownMessage absolute M;
-begin
-  {$IFDEF MSWINDOWS}
-  if FShowingPopup and (Msg.Value is TCommonCustomForm) then
-  begin
-    SetWindowPos(
-        FmxHandleToHWND(Msg.Value.Handle),
-        HWND_TOPMOST, 0, 0, 0, 0,
-        SWP_NOSIZE or SWP_NOMOVE or SWP_NOACTIVATE
-    );
-  end;
-  {$ENDIF}
 end;
 
 function TFMXTrayIcon.GetWindowHandle: HWND;
