@@ -141,7 +141,7 @@ end;
 const
   TOOLTIP_CLASSNAME = 'FMXTrayIconTooltip';
   TOOLTIP_PADDING   = 8;
-  TOOLTIP_MAX_WIDTH = 400;
+  TOOLTIP_MAX_WIDTH = 800;
 
 function TooltipWndProc(Wnd: HWND; Msg: UINT; WParam: WParam; LParam: LParam): LRESULT; stdcall;
 var
@@ -254,75 +254,63 @@ begin
   if (Bitmap = nil) or (Bitmap.Width = 0) or (Bitmap.Height = 0) then
     Exit;
 
-  hbmColor := CreateBitmap(Bitmap.Width, Bitmap.Height, 1, 32, nil);
-  hbmMask := CreateBitmap(Bitmap.Width, Bitmap.Height, 1, 1, nil);
-
-  if (hbmColor = 0) or (hbmMask = 0) then
-  begin
-    if hbmColor <> 0 then DeleteObject(hbmColor);
-    if hbmMask <> 0 then DeleteObject(hbmMask);
-    Exit;
-  end;
-
-  DC := GetDC(0);
+  hbmColor := 0;
+  hbmMask  := 0;
   try
-    ColorDC := CreateCompatibleDC(DC);
-    MaskDC := CreateCompatibleDC(DC);
+    hbmColor := CreateBitmap(Bitmap.Width, Bitmap.Height, 1, 32, nil);
+    if hbmColor = 0 then Exit;
+
+    hbmMask := CreateBitmap(Bitmap.Width, Bitmap.Height, 1, 1, nil);
+    if hbmMask = 0 then Exit;
+
+    DC := GetDC(0);
     try
-      OldColorBmp := SelectObject(ColorDC, hbmColor);
-      OldMaskBmp := SelectObject(MaskDC, hbmMask);
-
-      PatBlt(ColorDC, 0, 0, Bitmap.Width, Bitmap.Height, BLACKNESS);
-      PatBlt(MaskDC, 0, 0, Bitmap.Width, Bitmap.Height, WHITENESS); // По умолчанию все непрозрачно
-
-      if Bitmap.Map(TMapAccess.Read, BitmapData) then
+      ColorDC := CreateCompatibleDC(DC);
+      MaskDC  := CreateCompatibleDC(DC);
       try
-        for y := 0 to Bitmap.Height - 1 do
-        begin
-          for x := 0 to Bitmap.Width - 1 do
-          begin
-            var Pixel := BitmapData.GetPixel(x, y);
-            var R := TAlphaColorRec(Pixel).R;
-            var G := TAlphaColorRec(Pixel).G;
-            var B := TAlphaColorRec(Pixel).B;
-            var A := TAlphaColorRec(Pixel).A;
-
-            SetPixelV(ColorDC, x, y, RGB(R, G, B));
-
-            // Для маски: белый = прозрачный, черный = непрозрачный
-            if A < 128 then
-              SetPixelV(MaskDC, x, y, RGB(255, 255, 255))  // Прозрачный
-            else
-              SetPixelV(MaskDC, x, y, RGB(0, 0, 0));       // Непрозрачный
-          end;
+        OldColorBmp := SelectObject(ColorDC, hbmColor);
+        OldMaskBmp  := SelectObject(MaskDC,  hbmMask);
+        PatBlt(ColorDC, 0, 0, Bitmap.Width, Bitmap.Height, BLACKNESS);
+        PatBlt(MaskDC,  0, 0, Bitmap.Width, Bitmap.Height, WHITENESS);
+        if Bitmap.Map(TMapAccess.Read, BitmapData) then
+        try
+          for y := 0 to Bitmap.Height - 1 do
+            for x := 0 to Bitmap.Width - 1 do
+            begin
+              var Pixel := BitmapData.GetPixel(x, y);
+              var R := TAlphaColorRec(Pixel).R;
+              var G := TAlphaColorRec(Pixel).G;
+              var B := TAlphaColorRec(Pixel).B;
+              var A := TAlphaColorRec(Pixel).A;
+              SetPixelV(ColorDC, x, y, RGB(R, G, B));
+              if A < 128 then
+                SetPixelV(MaskDC, x, y, RGB(255, 255, 255))
+              else
+                SetPixelV(MaskDC, x, y, RGB(0, 0, 0));
+            end;
+        finally
+          Bitmap.Unmap(BitmapData);
         end;
+        SelectObject(ColorDC, OldColorBmp);
+        SelectObject(MaskDC,  OldMaskBmp);
       finally
-        Bitmap.Unmap(BitmapData);
+        DeleteDC(ColorDC);
+        DeleteDC(MaskDC);
       end;
-
-      SelectObject(ColorDC, OldColorBmp);
-      SelectObject(MaskDC, OldMaskBmp);
-
     finally
-      DeleteDC(ColorDC);
-      DeleteDC(MaskDC);
+      ReleaseDC(0, DC);
     end;
+
+    FillChar(IconInfo, SizeOf(IconInfo), 0);
+    IconInfo.fIcon    := True;
+    IconInfo.hbmColor := hbmColor;
+    IconInfo.hbmMask  := hbmMask;
+    Result := CreateIconIndirect(IconInfo);
   finally
-    ReleaseDC(0, DC);
+    if hbmColor <> 0 then DeleteObject(hbmColor);
+    if hbmMask  <> 0 then DeleteObject(hbmMask);
   end;
-
-  FillChar(IconInfo, SizeOf(IconInfo), 0);
-  IconInfo.fIcon := True;
-  IconInfo.hbmColor := hbmColor;
-  IconInfo.hbmMask := hbmMask;
-
-  Result := CreateIconIndirect(IconInfo);
-
-  if Result = 0 then
-  begin
-    DeleteObject(hbmColor);
-    DeleteObject(hbmMask);
-  end;
+  // Result (HICON) must be released by the caller via DestroyIcon()
 end;
 {$ENDIF}
 
@@ -539,19 +527,27 @@ end;
 
 procedure TFMXTrayIcon.LoadIconFromBitmapInternal(Bitmap: TBitmap);
 {$IFDEF MSWINDOWS}
+var
+  NewIcon: HICON;
 begin
   if Bitmap = nil then
     Exit;
 
-  FHICON := BitmapToHICON(Bitmap);
+  NewIcon := BitmapToHICON(Bitmap);
+  try
+    if FHICON = 0 then
+      FHICON := GetClassLong(GetWindowHandle, GCL_HICONSM);
 
-  if FHICON = 0 then
-    FHICON := GetClassLong(GetWindowHandle, GCL_HICONSM);
-
-  if FShowing then begin
-    FNotifyIconData.hIcon := FHICON;
-    FNotifyIconData.uFlags := NIF_ICON;
-    Shell_NotifyIcon(NIM_MODIFY, @FNotifyIconData);
+    if FShowing then begin
+      FNotifyIconData.hIcon := FHICON;
+      FNotifyIconData.uFlags := NIF_ICON;
+      Shell_NotifyIcon(NIM_MODIFY, @FNotifyIconData);
+    end;
+  finally
+    if FHICON<>0 then begin
+      DestroyIcon(FHICON);
+      FHICON:=NewIcon;
+    end;
   end;
 {$ELSE}
 begin
@@ -593,6 +589,9 @@ begin
   if FShowing then
     Hide;
   TrayList.Delete(Self);
+  if FHICON<>0 then begin
+    DestroyIcon(FHICON);
+  end;
 {$IFDEF MSWINDOWS}
   HideCustomTooltip;
 {$ENDIF}
